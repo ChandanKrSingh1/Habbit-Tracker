@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Dark Habit Tracker — Local</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#071025; --card:#071725; --muted:#94a3b8; --text:#e6eef8;
+  --accent1:#7dd3fc; --accent2:#60a5fa; --card-2:#0b1220;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:linear-gradient(180deg,#030617,#071025);color:var(--text);font-size:14px}
+.container{max-width:1150px;margin:20px auto;padding:18px;display:grid;grid-template-columns:1fr;gap:18px}
+.header{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.title{font-size:20px;font-weight:700}
+.grid{display:grid;grid-template-columns:360px 1fr;gap:18px}
+.card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));padding:16px;border-radius:12px;border:1px solid rgba(255,255,255,0.03)}
+.left{display:flex;flex-direction:column;gap:12px}
+.small{color:var(--muted);font-size:13px}
+.controls{display:flex;gap:8px;align-items:center}
+.input{width:100%;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit}
+.btn{padding:8px 10px;border-radius:8px;border:0;background:var(--accent1);color:#042433;cursor:pointer}
+.btn-muted{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:var(--accent2);cursor:pointer}
+.habit-list{display:flex;flex-direction:column;gap:8px;max-height:55vh;overflow:auto;padding-right:6px}
+.habit-row{display:flex;align-items:center;gap:8px;padding:8px;border-radius:8px;background:rgba(255,255,255,0.01)}
+.habit-color{width:12px;height:12px;border-radius:4px}
+.habit-meta{flex:1}
+.badge{font-size:12px;color:var(--muted)}
+.right-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.heatmap{display:flex;gap:10px;align-items:center;flex-direction:column}
+.heat-grid{display:grid;grid-auto-flow:column;gap:6px}
+.heat-cell{width:12px;height:12px;border-radius:4px;background:#0b1320;box-shadow: inset 0 1px 0 rgba(255,255,255,0.02)}
+.legend{display:flex;gap:8px;align-items:center;margin-top:8px;color:var(--muted)}
+.legend .dot{width:12px;height:12px;border-radius:4px}
+.section-title{font-weight:600;margin-bottom:8px}
+.inline{display:flex;gap:8px;align-items:center}
+.calendar{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:10px}
+.day{min-height:44px;border-radius:8px;padding:6px;background:rgba(255,255,255,0.01);display:flex;flex-direction:column;justify-content:space-between}
+.day .date{font-size:12px;color:var(--muted)}
+.mini-grid{display:grid;grid-template-columns:repeat(13,12px);gap:6px}
+.pinned-row{display:flex;gap:12px;flex-wrap:wrap}
+.pin-card{padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.02);min-width:200px;background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.005))}
+.mood-legend{display:flex;gap:6px;align-items:center}
+.mood-good{background:#16a34a} .mood-ok{background:#f59e0b} .mood-bad{background:#ef4444}
+@media(max-width:980px){.grid{grid-template-columns:1fr} .mini-grid{grid-template-columns:repeat(12,12px)}}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div>
+      <div class="title">Habit Tracker — Dark Heatmap</div>
+      <div class="small">Local version • Combined & Pinned view • Daily Mood</div>
+    </div>
+    <div class="inline">
+      <button id="exportBtn" class="btn-muted small">Export</button>
+      <button id="importBtn" class="btn-muted small">Import</button>
+      <input type="file" id="importFile" accept="application/json" style="display:none">
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- LEFT -->
+    <div class="card left">
+      <div>
+        <div class="section-title">Add Habit</div>
+        <div style="display:flex;gap:8px">
+          <input id="habitName" class="input" placeholder="e.g. Exercise 20 min"/>
+          <button id="addHabit" class="btn">Add</button>
+        </div>
+      </div>
+
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
+          <div class="section-title">Your Habits</div>
+          <div class="small" id="countHabits">0</div>
+        </div>
+        <div class="habit-list" id="habitList"></div>
+      </div>
+
+      <div style="margin-top:12px">
+        <div class="section-title">Pinned Habits</div>
+        <div class="small">Pin important habits for quick mini-grid view</div>
+        <div class="pinned-row" id="pinnedRow" style="margin-top:10px"></div>
+      </div>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="card">
+      <!-- COMBINED PROGRESS -->
+      <div>
+        <div class="right-top">
+          <div>
+            <div class="section-title">Combined Progress <span class="small" id="daysTracked"></span></div>
+            <div class="small">Shows how many habits you completed each day (last 180 days)</div>
+          </div>
+          <div class="legend" id="combinedLegend"></div>
+        </div>
+
+        <div style="display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap">
+          <div id="combinedHeat" class="heatmap"></div>
+          <div style="flex:1">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div class="small">Click a square to view date details below</div>
+              <div class="small" id="selectedDateInfo"></div>
+            </div>
+            <div id="selectedDateDetails" style="margin-top:8px;color:var(--muted)"></div>
+          </div>
+        </div>
+      </div>
+
+      <hr style="border:none;border-top:1px solid rgba(255,255,255,0.03);margin:14px 0">
+
+      <!-- PINNED HABITS -->
+      <div>
+        <div class="section-title">Pinned Habits Overview</div>
+        <div class="small">Mini grids show last 90 days for each pinned habit</div>
+        <div id="pinnedCards" style="display:flex;gap:12px;flex-wrap:wrap;margin-top:10px"></div>
+      </div>
+
+      <hr style="border:none;border-top:1px solid rgba(255,255,255,0.03);margin:14px 0">
+
+      <!-- DAILY MOOD -->
+      <div>
+        <div class="section-title">Daily Mood <span class="small" id="moodTracked"></span></div>
+        <div class="small">Set mood for a day (Good/Okay/Bad). Last 249 days shown.</div>
+        <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+          <input type="date" id="moodDate" class="input" style="width:180px"/>
+          <select id="moodSelect" class="input" style="width:120px">
+            <option value="">Set Mood</option>
+            <option value="good">Good</option>
+            <option value="ok">Okay</option>
+            <option value="bad">Bad</option>
+            <option value="clear">Clear</option>
+          </select>
+          <button id="setMood" class="btn">Set</button>
+        </div>
+
+        <div style="margin-top:10px" id="moodHeatContainer"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* -----------------------
+   Simple Local Habit Tracker
+   - Habits stored in localStorage under 'habits_v2'
+   - mood stored in 'mood_v1'
+   ----------------------- */
+(function(){
+  const uid = ()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  const formatYMD = d => d.toISOString().slice(0,10);
+  const todayStr = ()=>formatYMD(new Date());
+
+  // Load state
+  let habits = JSON.parse(localStorage.getItem('habits_v2')||'[]'); // {id,name,color,records:{ymd:true}, pinned:bool}
+  let mood = JSON.parse(localStorage.getItem('mood_v1')||'{}'); // { ymd: 'good'|'ok'|'bad' }
+  const colors = ['#60a5fa','#7dd3fc','#f472b6','#f97316','#34d399','#a78bfa','#fb7185','#f59e0b'];
+
+  // Elements
+  const habitList = document.getElementById('habitList');
+  const pinnedRow = document.getElementById('pinnedRow');
+  const pinnedCards = document.getElementById('pinnedCards');
+  const addHabit = document.getElementById('addHabit');
+  const habitName = document.getElementById('habitName');
+  const countHabits = document.getElementById('countHabits');
+  const combinedHeat = document.getElementById('combinedHeat');
+  const combinedLegend = document.getElementById('combinedLegend');
+  const daysTracked = document.getElementById('daysTracked');
+  const selectedDateInfo = document.getElementById('selectedDateInfo');
+  const selectedDateDetails = document.getElementById('selectedDateDetails');
+  const moodDate = document.getElementById('moodDate');
+  const moodSelect = document.getElementById('moodSelect');
+  const setMood = document.getElementById('setMood');
+  const moodHeatContainer = document.getElementById('moodHeatContainer');
+  const moodTracked = document.getElementById('moodTracked');
+
+  // Import/Export
+  const exportBtn = document.getElementById('exportBtn');
+  const importBtn = document.getElementById('importBtn');
+  const importFile = document.getElementById('importFile');
+
+  // Init defaults
+  if(!habits.length){
+    // optional demo habit (commented if not wanted)
+    //habits = [{id:uid(),name:'Exercise',color:colors[0],records:{},pinned:true,created: new Date().toISOString()}];
+  }
+
+  // Helpers
+  function save(){
+    localStorage.setItem('habits_v2', JSON.stringify(habits));
+    localStorage.setItem('mood_v1', JSON.stringify(mood));
+  }
+
+  function addNewHabit(name){
+    const h = { id: uid(), name, color: colors[Math.floor(Math.random()*colors.length)], records: {}, pinned:false, created: new Date().toISOString() };
+    habits.unshift(h);
+    save(); renderAll();
+  }
+
+  function deleteHabit(id){
+    habits = habits.filter(h=>h.id!==id);
+    save(); renderAll();
+  }
+
+  function togglePin(id){
+    const h = habits.find(x=>x.id===id);
+    if(h){ h.pinned = !h.pinned; save(); renderAll(); }
+  }
+
+  function toggleMark(id, ymd){
+    const h = habits.find(x=>x.id===id);
+    if(!h) return;
+    if(h.records[ymd]) delete h.records[ymd]; else h.records[ymd] = true;
+    save(); renderAll();
+  }
+
+  // Combined heatmap: last N days
+  function getDateArray(days){
+    const arr=[];
+    for(let i=days-1;i>=0;i--){
+      const d = new Date(); d.setDate(d.getDate()-i); arr.push(formatYMD(d));
+    }
+    return arr;
+  }
+
+  function combinedCounts(days=180){
+    const daysArr = getDateArray(days);
+    const counts = {};
+    daysArr.forEach(d => counts[d]=0);
+    for(const h of habits){
+      for(const k in h.records){
+        if(k in counts) counts[k] += 1;
+      }
+    }
+    return counts;
+  }
+
+  function renderCombined(){
+    combinedHeat.innerHTML='';
+    const days = 180;
+    const counts = combinedCounts(days);
+    const dates = Object.keys(counts);
+    daysTracked.textContent = `${days} days tracked`;
+    // color scale: 0 -> dark, 1 -> light1 ... >=5 -> darkest
+    function colorFor(n){
+      if(n<=0) return '#0b1320';
+      if(n===1) return '#c7b7ff';
+      if(n===2) return '#b794f4';
+      if(n===3) return '#9f7aea';
+      if(n===4) return '#7c3aed';
+      return '#5b21b6';
+    }
+    // legend
+    combinedLegend.innerHTML = '';
+    const keys = [{t:'0',c:'#0b1320'},{t:'1',c:'#c7b7ff'},{t:'2',c:'#b794f4'},{t:'3',c:'#9f7aea'},{t:'4',c:'#7c3aed'},{t:'5+',c:'#5b21b6'}];
+    keys.forEach(k=>{
+      const span = document.createElement('div'); span.style.display='flex';span.style.alignItems='center';span.style.gap='6px';
+      const dot = document.createElement('div'); dot.className='dot'; dot.style.width='12px'; dot.style.height='12px'; dot.style.background=k.c; dot.style.borderRadius='4px';
+      const lab = document.createElement('div'); lab.className='small'; lab.textContent=k.t + (k.t==='0' ? ' habit' : ' habits');
+      span.appendChild(dot); span.appendChild(lab); combinedLegend.appendChild(span);
+    });
+
+    // Build grid by week columns (Sunday..Saturday vertical)
+    const container = document.createElement('div'); container.style.display='flex'; container.style.alignItems='flex-start'; container.style.gap='6px';
+    // Determine start day alignment: first date weekday
+    const start = new Date(dates[0]);
+    const startWeekday = start.getDay(); // 0-6
+    // columns = Math.ceil(days/7)+1
+    const cols = Math.ceil(days/7) + 1;
+    // create columns
+    let idx=0;
+    // create blank top padding to align first column
+    const colContainer = document.createElement('div');
+    colContainer.className='heat-grid';
+    // We'll render as columns of 7 cells
+    for(let c=0; c<cols; c++){
+      const col = document.createElement('div'); col.style.display='grid'; col.style.gridTemplateRows='repeat(7,12px)'; col.style.gap='6px';
+      for(let r=0; r<7; r++){
+        const globalIndex = c*7 + r - startWeekday;
+        const cell = document.createElement('div'); cell.className='heat-cell';
+        if(globalIndex >=0 && globalIndex < dates.length){
+          const d = dates[globalIndex];
+          const n = counts[d]||0;
+          cell.style.background = colorFor(n);
+          cell.title = `${d} — ${n} habit(s)`;
+          cell.style.width='12px'; cell.style.height='12px'; cell.style.borderRadius='4px';
+          cell.style.cursor='pointer';
+          cell.onclick = ()=> showDateDetails(d);
+        } else {
+          cell.style.visibility='hidden';
+        }
+        col.appendChild(cell);
+      }
+      container.appendChild(col);
+    }
+    combinedHeat.appendChild(container);
+  }
+
+  function showDateDetails(ymd){
+    selectedDateInfo.textContent = ymd;
+    // list habits done that day
+    const done = habits.filter(h=>h.records && h.records[ymd]);
+    const notDone = habits.filter(h=>!(h.records && h.records[ymd]));
+    selectedDateDetails.innerHTML = `<div style="margin-top:6px"><strong>${done.length}</strong> habits done: ${done.map(d=>d.name).join(', ') || '—'}</div><div class="small" style="margin-top:6px"><strong>${notDone.length}</strong> not done</div>`;
+  }
+
+  // Render habit list and allow marking per selected date (today quick mark)
+  function renderHabitList(){
+    habitList.innerHTML='';
+    countHabits.textContent = habits.length;
+    for(const h of habits){
+      const row = document.createElement('div'); row.className='habit-row';
+      const color = document.createElement('div'); color.className='habit-color'; color.style.background = h.color;
+      const meta = document.createElement('div'); meta.className='habit-meta';
+      meta.innerHTML = `<div style="font-weight:600">${escape(h.name)}</div><div class="small">Created: ${new Date(h.created).toLocaleDateString()}</div>`;
+      const controls = document.createElement('div'); controls.style.display='flex'; controls.style.gap='6px';
+      const markBtn = document.createElement('button'); markBtn.className='btn-muted small'; markBtn.textContent = h.records && h.records[todayStr()] ? 'Unmark Today' : 'Mark Today';
+      markBtn.onclick = ()=>{ toggleMark(h.id, todayStr()); };
+      const pinBtn = document.createElement('button'); pinBtn.className='btn-muted small'; pinBtn.textContent = h.pinned ? 'Unpin' : 'Pin';
+      pinBtn.onclick = ()=>{ togglePin(h.id); };
+      const delBtn = document.createElement('button'); delBtn.className='btn-muted small'; delBtn.textContent = 'Delete';
+      delBtn.onclick = ()=>{ if(confirm('Delete habit?')) deleteHabit(h.id); };
+      controls.appendChild(markBtn); controls.appendChild(pinBtn); controls.appendChild(delBtn);
+
+      row.appendChild(color); row.appendChild(meta); row.appendChild(controls);
+      habitList.appendChild(row);
+    }
+    // pinned chips
+    pinnedRow.innerHTML='';
+    const pinned = habits.filter(h=>h.pinned);
+    pinned.forEach(h=>{
+      const chip = document.createElement('div'); chip.style.display='flex'; chip.style.alignItems='center'; chip.style.gap='8px'; chip.style.padding='6px 8px';
+      chip.style.borderRadius='999px'; chip.style.background='rgba(255,255,255,0.02)'; chip.style.cursor='pointer';
+      chip.onclick = ()=> togglePin(h.id);
+      const dot = document.createElement('div'); dot.style.width='10px'; dot.style.height='10px'; dot.style.background=h.color; dot.style.borderRadius='4px';
+      const t = document.createElement('div'); t.style.fontSize='13px'; t.textContent = h.name;
+      chip.appendChild(dot); chip.appendChild(t);
+      pinnedRow.appendChild(chip);
+    });
+  }
+
+  // Pinned cards mini-grid last 90 days
+  function renderPinnedCards(){
+    pinnedCards.innerHTML='';
+    const pinned = habits.filter(h=>h.pinned);
+    const days = 90;
+    const dates = getDateArray(days);
+    pinned.forEach(h=>{
+      const card = document.createElement('div'); card.className='pin-card';
+      const title = document.createElement('div'); title.style.display='flex'; title.style.justifyContent='space-between'; title.style.alignItems='center';
+      const tname = document.createElement('div'); tname.style.fontWeight='600'; tname.textContent = h.name;
+      const stats = document.createElement('div'); const done = dates.filter(d=>h.records && h.records[d]).length; stats.className='small'; stats.textContent = `${done}/${days}`;
+      title.appendChild(tname); title.appendChild(stats);
+      const mini = document.createElement('div'); mini.className='mini-grid'; mini.style.display='grid'; mini.style.gridTemplateColumns='repeat(13,12px)'; mini.style.gap='6px'; mini.style.marginTop='8px';
+      // fill as horizontal strip
+      dates.forEach(d=>{
+        const c = document.createElement('div'); c.style.width='12px'; c.style.height='12px'; c.style.borderRadius='4px';
+        c.style.background = (h.records && h.records[d]) ? h.color : '#0b1320';
+        mini.appendChild(c);
+      });
+      card.appendChild(title); card.appendChild(mini);
+      pinnedCards.appendChild(card);
+    });
+    if(!pinned.length){
+      pinnedCards.innerHTML = '<div class="small" style="opacity:0.7">No pinned habits yet. Click Pin on any habit.</div>';
+    }
+  }
+
+  // Mood heatmap last 249 days
+  function renderMoodHeat(){
+    moodHeatContainer.innerHTML='';
+    const days = 249;
+    const dates = getDateArray(days);
+    moodTracked.textContent = `${days} days tracked`;
+    const container = document.createElement('div'); container.style.display='flex'; container.style.gap='6px';
+    // columns of 7
+    const start = new Date(dates[0]); const startWeekday = start.getDay();
+    const cols = Math.ceil(days/7) + 1;
+    for(let c=0;c<cols;c++){
+      const col = document.createElement('div'); col.style.display='grid'; col.style.gridTemplateRows='repeat(7,12px)'; col.style.gap='6px';
+      for(let r=0;r<7;r++){
+        const globalIndex = c*7 + r - startWeekday;
+        const cell = document.createElement('div'); cell.className='heat-cell';
+        if(globalIndex>=0 && globalIndex<dates.length){
+          const d=dates[globalIndex];
+          const m = mood[d];
+          if(m==='good') cell.style.background = '#16a34a';
+          else if(m==='ok') cell.style.background = '#f59e0b';
+          else if(m==='bad') cell.style.background = '#ef4444';
+          else cell.style.background = '#0b1320';
+          cell.title = `${d} — ${m||'no mood'}`;
+        } else cell.style.visibility='hidden';
+        col.appendChild(cell);
+      }
+      container.appendChild(col);
+    }
+    // legend
+    const leg = document.createElement('div'); leg.className='mood-legend'; leg.style.marginTop='8px';
+    ['good','ok','bad'].forEach(k=>{
+      const dot = document.createElement('div'); dot.style.width='12px'; dot.style.height='12px'; dot.style.borderRadius='4px';
+      dot.style.background = k==='good' ? '#16a34a' : k==='ok' ? '#f59e0b' : '#ef4444';
+      const lab = document.createElement('div'); lab.className='small'; lab.textContent = k==='good' ? 'Good' : k==='ok' ? 'Okay' : 'Bad';
+      leg.appendChild(dot); leg.appendChild(lab);
+    });
+    moodHeatContainer.appendChild(container); moodHeatContainer.appendChild(leg);
+  }
+
+  // Utility escape
+  function escape(s){ return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  // UI wiring
+  addHabit.onclick = ()=> {
+    const name = habitName.value.trim();
+    if(!name) return alert('Enter habit name');
+    addNewHabit(name);
+    habitName.value=''; habitName.focus();
+  };
+
+  setMood.onclick = ()=>{
+    const d = moodDate.value;
+    const m = moodSelect.value;
+    if(!d || !m) return alert('Pick date and mood');
+    if(m==='clear'){ delete mood[d]; } else mood[d]=m;
+    save(); renderAll();
+  };
+
+  exportBtn.onclick = ()=>{
+    const dump = {habits,mood, exportedAt: new Date().toISOString()};
+    const blob = new Blob([JSON.stringify(dump,null,2)],{type:'application/json'});
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download='habit-backup.json'; a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  importBtn.onclick = ()=> importFile.click();
+  importFile.onchange = e=>{
+    const f = e.target.files[0]; if(!f) return;
+    const r = new FileReader(); r.onload = ev=>{
+      try{
+        const data = JSON.parse(ev.target.result);
+        if(data.habits) habits = data.habits;
+        if(data.mood) mood = data.mood;
+        save(); renderAll(); alert('Import OK');
+      }catch(err){ alert('Invalid file'); }
+    }; r.readAsText(f);
+    importFile.value='';
+  };
+
+  // initial rendering
+  function renderAll(){
+    renderHabitList();
+    renderCombined();
+    renderPinnedCards();
+    renderMoodHeat();
+    selectedDateInfo.textContent = '';
+    selectedDateDetails.textContent = '';
+  }
+
+  // helper to get array by days (used in pinned)
+  function getDateArray(days){
+    const arr=[];
+    for(let i=days-1;i>=0;i--){
+      const d = new Date(); d.setDate(d.getDate()-i); arr.push(formatYMD(d));
+    }
+    return arr;
+  }
+
+  // populate moodDate default to today
+  moodDate.value = todayStr();
+
+  // initial call
+  renderAll();
+
+  // Expose for console debugging (optional)
+  window.habitApp = {habits,mood,save,renderAll};
+})();
+</script>
+</body>
+</html>
